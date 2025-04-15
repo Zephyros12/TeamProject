@@ -1,32 +1,33 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using System;
-using TeamProject.ViewModels;
 
-namespace TeamProject
+namespace TeamProject;
+
+public class ViewLocator : IDataTemplate
 {
-    public class ViewLocator : IDataTemplate
+    public Control? Build(object? data)
     {
+        if (data == null)
+            return null;
 
-        public Control? Build(object? param)
-        {
-            if (param is null)
-                return null;
+        var type = data.GetType();
+        if (type == typeof(string) || type.IsValueType)
+            return new TextBlock { Text = data.ToString() };
 
-            var name = param.GetType().FullName!.Replace("ViewModel", "View", StringComparison.Ordinal);
-            var type = Type.GetType(name);
+        var viewTypeName = type.FullName?.Replace("ViewModel", "View");
+        if (viewTypeName == null)
+            return null;
 
-            if (type != null)
-            {
-                return (Control)Activator.CreateInstance(type)!;
-            }
+        var viewType = Type.GetType(viewTypeName);
+        if (viewType != null && Activator.CreateInstance(viewType) is Control view)
+            return view;
 
-            return new TextBlock { Text = "Not Found: " + name };
-        }
+        return new TextBlock { Text = $"[View Not Found for {type.Name}]" };
+    }
 
-        public bool Match(object? data)
-        {
-            return data is ViewModelBase;
-        }
+    public bool Match(object? data)
+    {
+        return data is not null;
     }
 }

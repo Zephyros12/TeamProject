@@ -1,0 +1,39 @@
+<UserControl
+    x:Class="TeamProject.Views.MainView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewmodels="clr-namespace:TeamProject.ViewModels">
+
+    <UserControl.DataContext>
+        <viewmodels:MainViewModel/>
+    </UserControl.DataContext>
+
+    <DockPanel Margin="20">
+        <!-- 상단 버튼 + 슬라이더 -->
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Spacing="10">
+            <Button Content="이미지 열기" Command="{Binding LoadImageCommand}" Width="120"/>
+            <Button Content="불량 검사" Command="{Binding InspectCommand}" Width="120"/>
+
+            <TextBlock Text="Threshold:" VerticalAlignment="Center" Margin="20,0,0,0"/>
+            <Slider Minimum="0" Maximum="255" Value="{Binding ThresholdValue}" Width="150"/>
+            <TextBlock Text="{Binding ThresholdValue}" VerticalAlignment="Center" Margin="5,0,0,0"/>
+        </StackPanel>
+
+        <!-- 중앙 본문 -->
+        <Grid ColumnDefinitions="*,300" Margin="0,10,0,0">
+            <!-- 이미지 미리보기 -->
+            <Border BorderThickness="1" BorderBrush="Gray" Margin="0,0,10,0">
+                <Image Source="{Binding Image}" Stretch="Uniform"/>
+            </Border>
+
+            <!-- 불량 리스트 -->
+            <ListBox ItemsSource="{Binding Defects}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+    </DockPanel>
+</UserControl>
