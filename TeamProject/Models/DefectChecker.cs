@@ -56,11 +56,7 @@ public static class DefectChecker
         using var binary = new Mat();
         Cv2.Threshold(gray, binary, threshold, 255, ThresholdTypes.BinaryInv);
 
-        using var morphed = new Mat();
-        var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
-        Cv2.MorphologyEx(binary, morphed, MorphTypes.Close, kernel);
-
-        Cv2.FindContours(morphed, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+        Cv2.FindContours(binary, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
         foreach (var contour in contours)
         {
@@ -70,11 +66,11 @@ public static class DefectChecker
             double aspectRatio = (double)rect.Width / rect.Height;
             double circularity = perimeter == 0 ? 0 : 4 * Math.PI * area / (perimeter * perimeter);
 
-            bool tooSmall = area < 4;
-            bool badAspect = aspectRatio < 0.05 || aspectRatio > 20.0;
-            bool notRound = false;
+            bool tooSmall = area < 2;
+            bool tooLarge = area > 5000;
+            bool badAspect = aspectRatio < 0.02 || aspectRatio > 50.0;
 
-            if (tooSmall || badAspect || notRound)
+            if (tooSmall || tooLarge || badAspect)
                 continue;
 
             defects.Add(new Defect
@@ -88,6 +84,7 @@ public static class DefectChecker
 
         return defects;
     }
+
 
     public static MemoryStream ToMemoryStream(this Mat mat)
     {
