@@ -1,4 +1,5 @@
-﻿using OpenCvSharp;
+﻿using Avalonia.Controls.Shapes;
+using OpenCvSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,8 +16,44 @@ public static class DefectChecker
         if (src.Empty())
             return (defects, src);
 
+        int patchSize = 512;
+        int step = patchSize;
+
+        for (int y = 0; y < src.Rows; y += step)
+        {
+            for (int x = 0; x < src.Cols; x += step)
+            {
+                int width = Math.Min(patchSize, src.Cols - x);
+                int height = Math.Min(patchSize, src.Rows - y);
+                var roi = new Rect(x, y, width, height);
+                var patch = new Mat(src, roi);
+
+                var found = FindDefectsInPatch(patch, threshold);
+
+                foreach (var d in found)
+                {
+                    var global = new Defect
+                    {
+                        X = d.X + x,
+                        Y = d.Y + y,
+                        Width = d.Width,
+                        Height = d.Height
+                    };
+                    defects.Add(global);
+                    Cv2.Rectangle(src, new Rect(global.X, global.Y, global.Width, global.Height), Scalar.Yellow, 2);
+                }
+            }
+        }
+
+        return (defects, src);
+    }
+
+    private static List<Defect> FindDefectsInPatch(Mat patch, int threshold)
+    {
+        var defects = new List<Defect>();
+
         using var gray = new Mat();
-        Cv2.CvtColor(src, gray, ColorConversionCodes.BGR2GRAY);
+        Cv2.CvtColor(patch, gray, ColorConversionCodes.BGR2GRAY);
 
         using var blurred = new Mat();
         Cv2.GaussianBlur(gray, blurred, new Size(3, 3), 0);
@@ -38,9 +75,9 @@ public static class DefectChecker
             double aspectratio = (double)rect.Width / rect.Height;
             double circularity = perimeter == 0 ? 0 : 4 * Math.PI * area / (perimeter * perimeter);
 
-            bool tooSmall = area < 20;
-            bool badAspect = aspectratio < 0.2 || aspectratio > 5.0;
-            bool notRound = circularity < 0.2;
+            bool tooSmall = area < 80;
+            bool badAspect = aspectratio < 0.5 || aspectratio > 2.0;
+            bool notRound = circularity < 0.3;
 
             if (tooSmall || badAspect || notRound)
                 continue;
@@ -52,11 +89,9 @@ public static class DefectChecker
                 Width = rect.Width,
                 Height = rect.Height,
             });
-
-            Cv2.Rectangle(src, rect, Scalar.Yellow, 2);
         }
 
-        return (defects, src);
+        return defects;
     }
 
     public static MemoryStream ToMemoryStream(this Mat mat)
