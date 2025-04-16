@@ -17,14 +17,28 @@
             <TextBlock Text="Threshold:" VerticalAlignment="Center" Margin="20,0,0,0"/>
             <Slider Minimum="0" Maximum="255" Value="{Binding ThresholdValue}" Width="150"/>
             <TextBlock Text="{Binding ThresholdValue}" VerticalAlignment="Center" Margin="5,0,0,0"/>
+
+            <TextBlock Text="배율:" VerticalAlignment="Center" Margin="20,0,0,0"/>
+            <TextBlock Text="{Binding ZoomLevel, StringFormat='{}{0:F2}x'}" VerticalAlignment="Center"/>
         </StackPanel>
 
         <!-- 본문 -->
         <Grid ColumnDefinitions="2*, 1*">
 
             <!-- 이미지 원본 표시 -->
-            <Border BorderBrush="Gray" BorderThickness="1" Margin="0,10,10,10">
-                <Image Source="{Binding Image}" Stretch="Uniform"/>
+            <Border Grid.Column="0"
+                    BorderBrush="Gray"
+                    BorderThickness="1"
+                    Margin="0,10,10,10"
+                    PointerWheelChanged="OnImageWheel">
+
+                <Image x:Name="ZoombleImage"
+                       Source="{Binding Image}"
+                       Stretch="Uniform">
+                    <Image.RenderTransform>
+                        <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
+                    </Image.RenderTransform>
+                </Image>
             </Border>
 
             <!-- 결과 리스트 -->
@@ -44,7 +58,7 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                
+
                 <TextBlock Text="선택된 불량 확대 보기" FontWeight="Bold"/>
                 <Border BorderBrush="DarkGray" BorderThickness="1" Width="280" Height="280">
                     <Image Source="{Binding PreviewImage}" Stretch="Uniform"/>

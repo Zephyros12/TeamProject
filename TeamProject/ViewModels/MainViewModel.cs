@@ -15,6 +15,13 @@ namespace TeamProject.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
+    private double _zoomLevel = 1.0;
+    public double ZoomLevel
+    {
+        get => _zoomLevel;
+        set => this.RaiseAndSetIfChanged(ref _zoomLevel, Math.Clamp(value, 0.1, 5.0));
+    }
+
     private Bitmap? _image;
     public Bitmap? Image
     {
