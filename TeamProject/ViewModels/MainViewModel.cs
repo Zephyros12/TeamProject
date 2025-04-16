@@ -1,6 +1,7 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media.Imaging;
+using OpenCvSharp;
 using ReactiveUI;
 using System;
 using System.Collections.Generic;
@@ -21,19 +22,38 @@ public class MainViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _image, value);
     }
 
-    public ObservableCollection<Defect> Defects { get; } = new();
+    private Bitmap? _previewImage;
+    public Bitmap? PreviewImage
+    {
+        get => _previewImage;
+        set => this.RaiseAndSetIfChanged(ref _previewImage, value);
+    }
 
-    public ReactiveCommand<Unit, Unit> LoadImageCommand { get; }
-    public ReactiveCommand<Unit, Unit> InspectCommand { get; }
+    public ObservableCollection<Defect> Defects { get; } = [];
 
     public string? CurrentImagePath { get; set; }
 
-    private int _thresholdValue = 100;
+    private int _thresholdValue = 120;
     public int ThresholdValue
     {
         get => _thresholdValue;
         set => this.RaiseAndSetIfChanged(ref _thresholdValue, value);
     }
+
+    private Defect? _selectedDefect;
+    public Defect? SelectedDefect
+    {
+        get => _selectedDefect;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedDefect, value);
+            if (value != null)
+                ShowPreview(value);
+        }
+    }
+
+    public ReactiveCommand<Unit, Unit> LoadImageCommand { get; }
+    public ReactiveCommand<Unit, Unit> InspectCommand { get; }
 
     public MainViewModel()
     {
@@ -62,12 +82,14 @@ public class MainViewModel : ViewModelBase
 
         var result = await dialog.ShowAsync(window);
 
-        if (result != null && result.Length > 0 && File.Exists(result[0]))
+        if (result is { Length: > 0 } && File.Exists(result[0]))
         {
             CurrentImagePath = result[0];
 
             await using var stream = File.OpenRead(CurrentImagePath);
-            Image = await Task.Run(() => Bitmap.DecodeToWidth(stream, 800));
+            Image = await Task.Run(() => Bitmap.DecodeToWidth(stream, 1000));
+            PreviewImage = null;
+            Defects.Clear();
         }
     }
 
@@ -86,5 +108,31 @@ public class MainViewModel : ViewModelBase
         {
             Defects.Add(defect);
         }
+
+        PreviewImage = null;
+        SelectedDefect = null;
+    }
+
+    private void ShowPreview(Defect defect)
+    {
+        if (string.IsNullOrEmpty(CurrentImagePath))
+            return;
+
+        using var src = new Mat(CurrentImagePath, ImreadModes.Color);
+        if (src.Empty())
+            return;
+
+        int padding = 50;
+
+        int x = Math.Max(defect.X - padding, 0);
+        int y = Math.Max(defect.Y - padding, 0);
+        int width = Math.Min(defect.Width + padding * 2, src.Width - x);
+        int height = Math.Min(defect.Height + padding * 2, src.Height - x);
+
+        var roi = new Rect(x, y, width, height);
+
+        using var cropped = new Mat(src, roi);
+        using var ms = cropped.ToMemoryStream();
+        PreviewImage = new Bitmap(ms);
     }
 }

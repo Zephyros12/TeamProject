@@ -9,7 +9,7 @@
     </UserControl.DataContext>
 
     <DockPanel Margin="20">
-        <!-- 상단 버튼 + 슬라이더 -->
+        <!-- 상단 컨트롤 -->
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Spacing="10">
             <Button Content="이미지 열기" Command="{Binding LoadImageCommand}" Width="120"/>
             <Button Content="불량 검사" Command="{Binding InspectCommand}" Width="120"/>
@@ -19,29 +19,37 @@
             <TextBlock Text="{Binding ThresholdValue}" VerticalAlignment="Center" Margin="5,0,0,0"/>
         </StackPanel>
 
-        <!-- 중앙 본문 -->
-        <Grid ColumnDefinitions="*, 300" Margin="0,10,0,0">
-            <!-- 이미지 미리보기 -->
-            <Border BorderThickness="1" BorderBrush="Gray" Margin="0,0,10,0">
+        <!-- 본문 -->
+        <Grid ColumnDefinitions="2*, 1*">
+
+            <!-- 이미지 원본 표시 -->
+            <Border BorderBrush="Gray" BorderThickness="1" Margin="0,10,10,10">
                 <Image Source="{Binding Image}" Stretch="Uniform"/>
             </Border>
 
-            <!-- 불량 리스트 -->
-            <ListBox ItemsSource="{Binding Defects}" Grid.Column="1">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Border BorderThickness="0,0,0,1" BorderBrush="Gray" Padding="5">
-                            <StackPanel>
-                                <TextBlock Text="🔧 불량 위치" FontWeight="Bold"/>
-                                <TextBlock Text="{Binding X, StringFormat='X: {0}'}"/>
-                                <TextBlock Text="{Binding Y, StringFormat='Y: {0}'}"/>
-                                <TextBlock Text="{Binding Width, StringFormat='W: {0}'}"/>
-                                <TextBlock Text="{Binding Height, StringFormat='H: {0}'}"/>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+            <!-- 결과 리스트 -->
+            <StackPanel Grid.Column="1" Spacing="10">
+                <ListBox ItemsSource="{Binding Defects}" SelectedItem="{Binding SelectedDefect}" Height="400">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderThickness="0,0,0,1" BorderBrush="LightGray" Padding="5">
+                                <StackPanel>
+                                    <TextBlock Text="불량 위치" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding X, StringFormat='X: {0}'}"/>
+                                    <TextBlock Text="{Binding Y, StringFormat='Y: {0}'}"/>
+                                    <TextBlock Text="{Binding Width, StringFormat='W: {0}'}"/>
+                                    <TextBlock Text="{Binding Height, StringFormat='H: {0}'}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                
+                <TextBlock Text="선택된 불량 확대 보기" FontWeight="Bold"/>
+                <Border BorderBrush="DarkGray" BorderThickness="1" Width="280" Height="280">
+                    <Image Source="{Binding PreviewImage}" Stretch="Uniform"/>
+                </Border>
+            </StackPanel>
         </Grid>
     </DockPanel>
 </UserControl>
