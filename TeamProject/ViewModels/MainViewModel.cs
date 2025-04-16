@@ -94,9 +94,11 @@ public class MainViewModel : ViewModelBase
             CurrentImagePath = result[0];
 
             await using var stream = File.OpenRead(CurrentImagePath);
-            Image = await Task.Run(() => Bitmap.DecodeToWidth(stream, 1000));
-            PreviewImage = null;
+            Image = await Task.Run(() => Bitmap.DecodeToWidth(stream, 1200));
+
             Defects.Clear();
+            PreviewImage = null;
+            SelectedDefect = null;
         }
     }
 
@@ -105,9 +107,9 @@ public class MainViewModel : ViewModelBase
         if (string.IsNullOrEmpty(CurrentImagePath) || !File.Exists(CurrentImagePath))
             return;
 
-        var (defects, resultImage) = DefectChecker.FindDefectsWithDraw(CurrentImagePath, ThresholdValue);
+        var (defects, resultMat) = DefectChecker.FindDefectsWithDraw(CurrentImagePath, ThresholdValue);
 
-        using var ms = resultImage.ToMemoryStream();
+        using var ms = resultMat.ToMemoryStream();
         Image = new Bitmap(ms);
 
         Defects.Clear();
@@ -129,7 +131,7 @@ public class MainViewModel : ViewModelBase
         if (src.Empty())
             return;
 
-        int padding = 50;
+        int padding = 100;
 
         int x = Math.Max(defect.X - padding, 0);
         int y = Math.Max(defect.Y - padding, 0);

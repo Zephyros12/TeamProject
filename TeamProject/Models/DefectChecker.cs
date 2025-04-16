@@ -1,5 +1,4 @@
-﻿using Avalonia.Controls.Shapes;
-using OpenCvSharp;
+﻿using OpenCvSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -17,11 +16,10 @@ public static class DefectChecker
             return (defects, src);
 
         int patchSize = 512;
-        int step = patchSize;
 
-        for (int y = 0; y < src.Rows; y += step)
+        for (int y = 0; y < src.Rows; y += patchSize)
         {
-            for (int x = 0; x < src.Cols; x += step)
+            for (int x = 0; x < src.Cols; x += patchSize)
             {
                 int width = Math.Min(patchSize, src.Cols - x);
                 int height = Math.Min(patchSize, src.Rows - y);
@@ -55,29 +53,26 @@ public static class DefectChecker
         using var gray = new Mat();
         Cv2.CvtColor(patch, gray, ColorConversionCodes.BGR2GRAY);
 
-        using var blurred = new Mat();
-        Cv2.GaussianBlur(gray, blurred, new Size(3, 3), 0);
-
         using var binary = new Mat();
-        Cv2.Threshold(blurred, binary, threshold, 255, ThresholdTypes.BinaryInv);
+        Cv2.Threshold(gray, binary, threshold, 255, ThresholdTypes.BinaryInv);
 
         using var morphed = new Mat();
         var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
         Cv2.MorphologyEx(binary, morphed, MorphTypes.Close, kernel);
 
-        Cv2.FindContours(binary, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+        Cv2.FindContours(morphed, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
         foreach (var contour in contours)
         {
             var rect = Cv2.BoundingRect(contour);
             double area = Cv2.ContourArea(contour);
             double perimeter = Cv2.ArcLength(contour, true);
-            double aspectratio = (double)rect.Width / rect.Height;
+            double aspectRatio = (double)rect.Width / rect.Height;
             double circularity = perimeter == 0 ? 0 : 4 * Math.PI * area / (perimeter * perimeter);
 
-            bool tooSmall = area < 80;
-            bool badAspect = aspectratio < 0.5 || aspectratio > 2.0;
-            bool notRound = circularity < 0.3;
+            bool tooSmall = area < 4;
+            bool badAspect = aspectRatio < 0.05 || aspectRatio > 20.0;
+            bool notRound = false;
 
             if (tooSmall || badAspect || notRound)
                 continue;
@@ -87,7 +82,7 @@ public static class DefectChecker
                 X = rect.X,
                 Y = rect.Y,
                 Width = rect.Width,
-                Height = rect.Height,
+                Height = rect.Height
             });
         }
 
