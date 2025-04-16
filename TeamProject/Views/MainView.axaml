@@ -13,53 +13,51 @@
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Top" Spacing="10">
             <Button Content="이미지 열기" Command="{Binding LoadImageCommand}" Width="120"/>
             <Button Content="불량 검사" Command="{Binding InspectCommand}" Width="120"/>
-
-            <TextBlock Text="Threshold:" VerticalAlignment="Center" Margin="20,0,0,0"/>
-            <Slider Minimum="0" Maximum="255" Value="{Binding ThresholdValue}" Width="150"/>
-            <TextBlock Text="{Binding ThresholdValue}" VerticalAlignment="Center" Margin="5,0,0,0"/>
-
-            <TextBlock Text="배율:" VerticalAlignment="Center" Margin="20,0,0,0"/>
-            <TextBlock Text="{Binding ZoomLevel, StringFormat='{}{0:F2}x'}" VerticalAlignment="Center"/>
+            <TextBlock Text="배율:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            <TextBlock Text="{Binding ZoomLevel, StringFormat='Zoom: {0:F2}x'}" VerticalAlignment="Center"/>
         </StackPanel>
 
         <!-- 본문 -->
         <Grid ColumnDefinitions="2*, 1*">
 
-            <!-- 이미지 원본 표시 -->
-            <Border Grid.Column="0"
-                    BorderBrush="Gray"
-                    BorderThickness="1"
-                    Margin="0,10,10,10"
-                    PointerWheelChanged="OnImageWheel">
+            <!-- 이미지 표시 -->
+            <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1"
+                    PointerWheelChanged="OnImageWheel"
+                    PointerPressed="OnImagePressed"
+                    PointerMoved="OnImageMoved"
+                    PointerReleased="OnImageReleased">
 
-                <Image x:Name="ZoombleImage"
-                       Source="{Binding Image}"
-                       Stretch="Uniform">
-                    <Image.RenderTransform>
-                        <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
-                    </Image.RenderTransform>
-                </Image>
+                <ScrollViewer ClipToBounds="True">
+                    <Image x:Name="ZoombleImage"
+                           Source="{Binding Image}"
+                           Stretch="None"
+                           Cursor="Cross">
+                        <Image.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
+                                <TranslateTransform X="{Binding OffsetX}" Y="{Binding OffsetY}"/>
+                            </TransformGroup>
+                        </Image.RenderTransform>
+                    </Image>
+                </ScrollViewer>
             </Border>
 
-            <!-- 결과 리스트 -->
-            <StackPanel Grid.Column="1" Spacing="10">
+            <!-- 결과 영역 -->
+            <StackPanel Grid.Column="1" Spacing="10" Margin="10,0,0,0">
                 <ListBox ItemsSource="{Binding Defects}" SelectedItem="{Binding SelectedDefect}" Height="400">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border BorderThickness="0,0,0,1" BorderBrush="LightGray" Padding="5">
-                                <StackPanel>
-                                    <TextBlock Text="불량 위치" FontWeight="Bold"/>
-                                    <TextBlock Text="{Binding X, StringFormat='X: {0}'}"/>
-                                    <TextBlock Text="{Binding Y, StringFormat='Y: {0}'}"/>
-                                    <TextBlock Text="{Binding Width, StringFormat='W: {0}'}"/>
-                                    <TextBlock Text="{Binding Height, StringFormat='H: {0}'}"/>
-                                </StackPanel>
-                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="{Binding X, StringFormat='X: {0}'}"/>
+                                <TextBlock Text="{Binding Y, StringFormat='Y: {0}'}"/>
+                                <TextBlock Text="{Binding Width, StringFormat='W: {0}'}"/>
+                                <TextBlock Text="{Binding Height, StringFormat='H: {0}'}"/>
+                            </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <TextBlock Text="선택된 불량 확대 보기" FontWeight="Bold"/>
+                <TextBlock Text="미리보기" FontWeight="Bold"/>
                 <Border BorderBrush="DarkGray" BorderThickness="1" Width="280" Height="280">
                     <Image Source="{Binding PreviewImage}" Stretch="Uniform"/>
                 </Border>

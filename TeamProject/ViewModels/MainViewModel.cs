@@ -15,6 +15,20 @@ namespace TeamProject.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
+    private double _offsetX;
+    public double OffsetX
+    {
+        get => _offsetX;
+        set => this.RaiseAndSetIfChanged(ref _offsetX, value);
+    }
+
+    private double _offsetY;
+    public double OffsetY
+    {
+        get => _offsetY;
+        set => this.RaiseAndSetIfChanged(ref _offsetY, value);
+    }
+
     private double _zoomLevel = 1.0;
     public double ZoomLevel
     {
