@@ -183,16 +183,21 @@ public class MainViewModel : ViewModelBase
         if (src.Empty())
             return;
 
-        int padding = 100;
+        int padding = 30;
+        int scale = 4;
+
         int x = Math.Max(defect.X - padding, 0);
         int y = Math.Max(defect.Y - padding, 0);
         int width = Math.Min(defect.Width + padding * 2, src.Width - x);
         int height = Math.Min(defect.Height + padding * 2, src.Height - y);
 
         var roi = new OpenCvSharp.Rect(x, y, width, height);
-
         using var cropped = new Mat(src, roi);
-        using var ms = cropped.ToMemoryStream();
+
+        var zoomed = new Mat();
+        Cv2.Resize(cropped, zoomed, new OpenCvSharp.Size(cropped.Width * scale, cropped.Height * scale), 0, 0, InterpolationFlags.Linear);
+
+        using var ms = zoomed.ToMemoryStream();
         PreviewImage = new Bitmap(ms);
     }
 }
