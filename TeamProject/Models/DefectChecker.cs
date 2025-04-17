@@ -15,7 +15,7 @@ public static class DefectChecker
         if (src.Empty())
             return (defects, src);
 
-        int patchSize = 512;
+        int patchSize = 128;
 
         for (int y = 0; y < src.Rows; y += patchSize)
         {
@@ -38,7 +38,7 @@ public static class DefectChecker
                         Height = d.Height
                     };
                     defects.Add(global);
-                    Cv2.Rectangle(src, new Rect(global.X, global.Y, global.Width, global.Height), Scalar.Yellow, 2);
+                    Cv2.Rectangle(src, new Rect(global.X, global.Y, global.Width, global.Height), Scalar.Yellow, 1);
                 }
             }
         }
@@ -66,9 +66,9 @@ public static class DefectChecker
             double aspectRatio = (double)rect.Width / rect.Height;
             double circularity = perimeter == 0 ? 0 : 4 * Math.PI * area / (perimeter * perimeter);
 
-            bool tooSmall = area < 2;
-            bool tooLarge = area > 5000;
-            bool badAspect = aspectRatio < 0.02 || aspectRatio > 50.0;
+            bool tooSmall = area < 1;
+            bool tooLarge = area > 2000;
+            bool badAspect = aspectRatio < 0.01 || aspectRatio > 100.0;
 
             if (tooSmall || tooLarge || badAspect)
                 continue;
@@ -84,6 +84,7 @@ public static class DefectChecker
 
         return defects;
     }
+
 
 
     public static MemoryStream ToMemoryStream(this Mat mat)

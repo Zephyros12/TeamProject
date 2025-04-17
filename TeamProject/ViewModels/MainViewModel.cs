@@ -75,11 +75,13 @@ public class MainViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> LoadImageCommand { get; }
     public ReactiveCommand<Unit, Unit> InspectCommand { get; }
+    public ReactiveCommand<Unit, Unit> ResetZoomCommand { get; }
 
     public MainViewModel()
     {
         LoadImageCommand = ReactiveCommand.CreateFromTask(LoadImageAsync);
         InspectCommand = ReactiveCommand.Create(InspectImage);
+        ResetZoomCommand = ReactiveCommand.Create(ResetZoom);
     }
 
     private async Task LoadImageAsync()
@@ -132,6 +134,10 @@ public class MainViewModel : ViewModelBase
             Defects.Add(defect);
         }
 
+        ZoomLevel = 1.0;
+        OffsetX = 0;
+        OffsetY = 0;
+
         PreviewImage = null;
         SelectedDefect = null;
     }
@@ -157,5 +163,12 @@ public class MainViewModel : ViewModelBase
         using var cropped = new Mat(src, roi);
         using var ms = cropped.ToMemoryStream();
         PreviewImage = new Bitmap(ms);
+    }
+
+    private void ResetZoom()
+    {
+        ZoomLevel = 1.0;
+        OffsetX = 0;
+        OffsetY = 0;
     }
 }
