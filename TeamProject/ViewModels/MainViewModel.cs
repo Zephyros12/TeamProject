@@ -1,5 +1,8 @@
-﻿using Avalonia.Controls;
+﻿using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Documents;
+using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using OpenCvSharp;
 using ReactiveUI;
@@ -15,27 +18,6 @@ namespace TeamProject.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
-    private double _offsetX;
-    public double OffsetX
-    {
-        get => _offsetX;
-        set => this.RaiseAndSetIfChanged(ref _offsetX, value);
-    }
-
-    private double _offsetY;
-    public double OffsetY
-    {
-        get => _offsetY;
-        set => this.RaiseAndSetIfChanged(ref _offsetY, value);
-    }
-
-    private double _zoomLevel = 1.0;
-    public double ZoomLevel
-    {
-        get => _zoomLevel;
-        set => this.RaiseAndSetIfChanged(ref _zoomLevel, Math.Clamp(value, 0.1, 5.0));
-    }
-
     private Bitmap? _image;
     public Bitmap? Image
     {
@@ -52,15 +34,6 @@ public class MainViewModel : ViewModelBase
 
     public ObservableCollection<Defect> Defects { get; } = [];
 
-    public string? CurrentImagePath { get; set; }
-
-    private int _thresholdValue = 120;
-    public int ThresholdValue
-    {
-        get => _thresholdValue;
-        set => this.RaiseAndSetIfChanged(ref _thresholdValue, value);
-    }
-
     private Defect? _selectedDefect;
     public Defect? SelectedDefect
     {
@@ -73,15 +46,46 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private double _zoomLevel = 1.0;
+    public double ZoomLevel
+    {
+        get => _zoomLevel;
+        set => this.RaiseAndSetIfChanged(ref _zoomLevel, Math.Clamp(value, 0.05, 10.0));
+    }
+
+    private double _offsetX;
+    public double OffsetX
+    {
+        get => _offsetX;
+        set => this.RaiseAndSetIfChanged(ref _offsetX, value);
+    }
+
+    private double _offsetY;
+    public double OffsetY
+    {
+        get => _offsetY;
+        set => this.RaiseAndSetIfChanged(ref _offsetY, value);
+    }
+
+    public string? CurrentImagePath { get; set; }
+    public int ThresholdValue { get; set; } = 120;
+
     public ReactiveCommand<Unit, Unit> LoadImageCommand { get; }
     public ReactiveCommand<Unit, Unit> InspectCommand { get; }
     public ReactiveCommand<Unit, Unit> ResetZoomCommand { get; }
+    public ReactiveCommand<PointerWheelEventArgs, Unit> ZoomInCommand { get; }
+    public ReactiveCommand<PointerWheelEventArgs, Unit> ZoomOutCommand { get; }
+public ReactiveCommand<Vector, Unit> PanCommand { get; }
 
     public MainViewModel()
     {
         LoadImageCommand = ReactiveCommand.CreateFromTask(LoadImageAsync);
         InspectCommand = ReactiveCommand.Create(InspectImage);
         ResetZoomCommand = ReactiveCommand.Create(ResetZoom);
+        ZoomInCommand = ReactiveCommand.Create<PointerWheelEventArgs>(OnZoomIn);
+        ZoomOutCommand = ReactiveCommand.Create<PointerWheelEventArgs>(OnZoomOut);
+
+        PanCommand = ReactiveCommand.Create<Vector>(OnPan);
     }
 
     private async Task LoadImageAsync()
@@ -96,25 +100,23 @@ public class MainViewModel : ViewModelBase
             AllowMultiple = false
         };
 
-        var window = App.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-            ? desktop.MainWindow
-            : null;
-
-        if (window == null)
-            return;
-
-        var result = await dialog.ShowAsync(window);
-
-        if (result is { Length: > 0 } && File.Exists(result[0]))
+        if (App.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            CurrentImagePath = result[0];
+            var window = desktop.MainWindow;
+            var result = await dialog.ShowAsync(window);
 
-            await using var stream = File.OpenRead(CurrentImagePath);
-            Image = await Task.Run(() => Bitmap.DecodeToWidth(stream, 1200));
+            if (result is { Length: > 0 } && File.Exists(result[0]))
+            {
+                CurrentImagePath = result[0];
 
-            Defects.Clear();
-            PreviewImage = null;
-            SelectedDefect = null;
+                await using var stream = File.OpenRead(CurrentImagePath);
+                Image = await Task.Run(() => Bitmap.DecodeToWidth(stream, 1200));
+
+                Defects.Clear();
+                PreviewImage = null;
+                SelectedDefect = null;
+                ResetZoom();
+            }
         }
     }
 
@@ -130,16 +132,18 @@ public class MainViewModel : ViewModelBase
 
         Defects.Clear();
         foreach (var defect in defects)
-        {
             Defects.Add(defect);
-        }
-
-        ZoomLevel = 1.0;
-        OffsetX = 0;
-        OffsetY = 0;
 
         PreviewImage = null;
         SelectedDefect = null;
+        ResetZoom();
+    }
+
+    private void ResetZoom()
+    {
+        ZoomLevel = 1.0;
+        OffsetX = 0;
+        OffsetY = 0;
     }
 
     private void ShowPreview(Defect defect)
@@ -152,23 +156,53 @@ public class MainViewModel : ViewModelBase
             return;
 
         int padding = 100;
-
         int x = Math.Max(defect.X - padding, 0);
         int y = Math.Max(defect.Y - padding, 0);
         int width = Math.Min(defect.Width + padding * 2, src.Width - x);
-        int height = Math.Min(defect.Height + padding * 2, src.Height - x);
+        int height = Math.Min(defect.Height + padding * 2, src.Height - y);
 
-        var roi = new Rect(x, y, width, height);
+        var roi = new OpenCvSharp.Rect(x, y, width, height);
 
         using var cropped = new Mat(src, roi);
         using var ms = cropped.ToMemoryStream();
         PreviewImage = new Bitmap(ms);
     }
 
-    private void ResetZoom()
+    private void OnZoomIn(PointerWheelEventArgs e)
     {
-        ZoomLevel = 1.0;
-        OffsetX = 0;
-        OffsetY = 0;
+        if ((e.KeyModifiers & KeyModifiers.Control) == 0)
+            return;
+
+        var mousePos = e.GetPosition(null);
+        double oldZoom = ZoomLevel;
+        double newZoom = Math.Clamp(oldZoom + 0.05, 0.05, 10.0);
+
+        double ratio = newZoom / oldZoom;
+        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
+        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
+
+        ZoomLevel = newZoom;
+    }
+
+    private void OnZoomOut(PointerWheelEventArgs e)
+    {
+        if ((e.KeyModifiers & KeyModifiers.Control) == 0)
+            return;
+
+        var mousePos = e.GetPosition(null);
+        double oldZoom = ZoomLevel;
+        double newZoom = Math.Clamp(oldZoom - 0.05, 0.05, 10.0);
+
+        double ratio = newZoom / oldZoom;
+        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
+        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
+
+        ZoomLevel = newZoom;
+    }
+
+    private void OnPan(Vector delta)
+    {
+        OffsetX += delta.X;
+        OffsetY += delta.Y;
     }
 }

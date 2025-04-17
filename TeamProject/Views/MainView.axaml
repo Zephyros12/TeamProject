@@ -2,7 +2,9 @@
     x:Class="TeamProject.Views.MainView"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:viewmodels="clr-namespace:TeamProject.ViewModels">
+    xmlns:viewmodels="clr-namespace:TeamProject.ViewModels"
+    xmlns:i="using:Avalonia.Xaml.Interactivity"
+    xmlns:behaviors="clr-namespace:TeamProject.Behaviors">
 
     <UserControl.DataContext>
         <viewmodels:MainViewModel/>
@@ -14,25 +16,25 @@
             <Button Content="이미지 열기" Command="{Binding LoadImageCommand}" Width="120"/>
             <Button Content="불량 검사" Command="{Binding InspectCommand}" Width="120"/>
             <Button Content="초기화" Command="{Binding ResetZoomCommand}" Width="100"/>
-            <TextBlock Text="배율:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+
+            <TextBlock Text="배율:" VerticalAlignment="Center" Margin="20,0,0,0"/>
             <TextBlock Text="{Binding ZoomLevel, StringFormat='Zoom: {0:F2}x'}" VerticalAlignment="Center"/>
         </StackPanel>
 
-        <!-- 본문 -->
         <Grid ColumnDefinitions="2*, 1*">
-
-            <!-- 이미지 표시 -->
-            <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1"
-                    PointerWheelChanged="OnImageWheel"
-                    PointerPressed="OnImagePressed"
-                    PointerMoved="OnImageMoved"
-                    PointerReleased="OnImageReleased">
-
+            <!-- 이미지 패널 -->
+            <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1">
                 <ScrollViewer ClipToBounds="True">
                     <Image x:Name="ZoombleImage"
                            Source="{Binding Image}"
                            Stretch="None"
                            Cursor="Cross">
+                        <i:Interaction.Behaviors>
+                            <behaviors:PointerWheelChangedBehavior
+                                ZoomInCommand="{Binding ZoomInCommand}"
+                                ZoomOutCommand="{Binding ZoomOutCommand}"/>
+                            <behaviors:PointerPanBehavior PanCommand="{Binding PanCommand}" />
+                        </i:Interaction.Behaviors>
                         <Image.RenderTransform>
                             <TransformGroup>
                                 <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
@@ -43,9 +45,11 @@
                 </ScrollViewer>
             </Border>
 
-            <!-- 결과 영역 -->
+            <!-- 불량 리스트 + 미리보기 -->
             <StackPanel Grid.Column="1" Spacing="10" Margin="10,0,0,0">
-                <ListBox ItemsSource="{Binding Defects}" SelectedItem="{Binding SelectedDefect}" Height="400">
+                <ListBox ItemsSource="{Binding Defects}"
+                         SelectedItem="{Binding SelectedDefect}"
+                         Height="400">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel>
