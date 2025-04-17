@@ -15,7 +15,7 @@ public static class DefectChecker
         if (src.Empty())
             return (defects, src);
 
-        int patchSize = 128;
+        int patchSize = 256;
 
         for (int y = 0; y < src.Rows; y += patchSize)
         {
@@ -26,7 +26,7 @@ public static class DefectChecker
                 var roi = new Rect(x, y, width, height);
                 var patch = new Mat(src, roi);
 
-                var found = FindDefectsInPatch(patch, threshold);
+                var found = FindDefectsInPatch(patch);
 
                 foreach (var d in found)
                 {
@@ -46,17 +46,22 @@ public static class DefectChecker
         return (defects, src);
     }
 
-    private static List<Defect> FindDefectsInPatch(Mat patch, int threshold)
+    private static List<Defect> FindDefectsInPatch(Mat patch)
     {
         var defects = new List<Defect>();
 
         using var gray = new Mat();
         Cv2.CvtColor(patch, gray, ColorConversionCodes.BGR2GRAY);
+        Cv2.GaussianBlur(gray, gray, new Size(3, 3), 0);
 
         using var binary = new Mat();
-        Cv2.Threshold(gray, binary, threshold, 255, ThresholdTypes.BinaryInv);
+        Cv2.Threshold(gray, binary, 0, 255, ThresholdTypes.BinaryInv | ThresholdTypes.Otsu);
 
-        Cv2.FindContours(binary, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+        using var morphed = new Mat();
+        var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
+        Cv2.MorphologyEx(binary, morphed, MorphTypes.Close, kernel);
+
+        Cv2.FindContours(morphed, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
         foreach (var contour in contours)
         {
@@ -84,8 +89,6 @@ public static class DefectChecker
 
         return defects;
     }
-
-
 
     public static MemoryStream ToMemoryStream(this Mat mat)
     {

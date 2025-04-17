@@ -1,9 +1,7 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Controls.Documents;
-using Avalonia.Input;
 using Avalonia.Media.Imaging;
+using Avalonia.Input;
 using OpenCvSharp;
 using ReactiveUI;
 using System;
@@ -13,6 +11,7 @@ using System.IO;
 using System.Reactive;
 using System.Threading.Tasks;
 using TeamProject.Models;
+using Avalonia.Controls.ApplicationLifetimes;
 
 namespace TeamProject.ViewModels;
 
@@ -75,7 +74,6 @@ public class MainViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ResetZoomCommand { get; }
     public ReactiveCommand<PointerWheelEventArgs, Unit> ZoomInCommand { get; }
     public ReactiveCommand<PointerWheelEventArgs, Unit> ZoomOutCommand { get; }
-public ReactiveCommand<Vector, Unit> PanCommand { get; }
 
     public MainViewModel()
     {
@@ -84,8 +82,32 @@ public ReactiveCommand<Vector, Unit> PanCommand { get; }
         ResetZoomCommand = ReactiveCommand.Create(ResetZoom);
         ZoomInCommand = ReactiveCommand.Create<PointerWheelEventArgs>(OnZoomIn);
         ZoomOutCommand = ReactiveCommand.Create<PointerWheelEventArgs>(OnZoomOut);
+    }
 
-        PanCommand = ReactiveCommand.Create<Vector>(OnPan);
+    private void OnZoomIn(PointerWheelEventArgs e)
+    {
+        var mousePos = e.GetPosition(null);
+        double oldZoom = ZoomLevel;
+        double newZoom = Math.Clamp(oldZoom + 0.05, 0.05, 10.0);
+        double ratio = newZoom / oldZoom;
+
+        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
+        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
+
+        ZoomLevel = newZoom;
+    }
+
+    private void OnZoomOut(PointerWheelEventArgs e)
+    {
+        var mousePos = e.GetPosition(null);
+        double oldZoom = ZoomLevel;
+        double newZoom = Math.Clamp(oldZoom - 0.05, 0.05, 10.0);
+        double ratio = newZoom / oldZoom;
+
+        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
+        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
+
+        ZoomLevel = newZoom;
     }
 
     private async Task LoadImageAsync()
@@ -166,43 +188,5 @@ public ReactiveCommand<Vector, Unit> PanCommand { get; }
         using var cropped = new Mat(src, roi);
         using var ms = cropped.ToMemoryStream();
         PreviewImage = new Bitmap(ms);
-    }
-
-    private void OnZoomIn(PointerWheelEventArgs e)
-    {
-        if ((e.KeyModifiers & KeyModifiers.Control) == 0)
-            return;
-
-        var mousePos = e.GetPosition(null);
-        double oldZoom = ZoomLevel;
-        double newZoom = Math.Clamp(oldZoom + 0.05, 0.05, 10.0);
-
-        double ratio = newZoom / oldZoom;
-        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
-        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
-
-        ZoomLevel = newZoom;
-    }
-
-    private void OnZoomOut(PointerWheelEventArgs e)
-    {
-        if ((e.KeyModifiers & KeyModifiers.Control) == 0)
-            return;
-
-        var mousePos = e.GetPosition(null);
-        double oldZoom = ZoomLevel;
-        double newZoom = Math.Clamp(oldZoom - 0.05, 0.05, 10.0);
-
-        double ratio = newZoom / oldZoom;
-        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
-        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
-
-        ZoomLevel = newZoom;
-    }
-
-    private void OnPan(Vector delta)
-    {
-        OffsetX += delta.X;
-        OffsetY += delta.Y;
     }
 }
