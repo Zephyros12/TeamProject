@@ -63,8 +63,15 @@ public static class DefectChecker
         var result = new Mat();
         Cv2.CvtColor(src, result, ColorConversionCodes.GRAY2BGR);
         foreach (var defect in rawDefects)
-            Cv2.Rectangle(result, new Rect(defect.X, defect.Y, defect.Width, defect.Height), Scalar.Yellow, 4);
+        {
+            int padding = 30;
+            int x = Math.Max(defect.X - padding, 0);
+            int y = Math.Max(defect.Y - padding, 0);
+            int width = defect.Width + padding * 2;
+            int height = defect.Height + padding * 2;
 
+            Cv2.Rectangle(result, new Rect(x, y, width, height), Scalar.Yellow, 4);
+        }
         return (rawDefects.ToList(), result);
     }
 
