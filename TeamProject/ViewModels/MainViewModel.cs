@@ -1,7 +1,8 @@
 ﻿using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media.Imaging;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
+using Avalonia.Media.Imaging;
 using OpenCvSharp;
 using ReactiveUI;
 using System;
@@ -11,7 +12,6 @@ using System.IO;
 using System.Reactive;
 using System.Threading.Tasks;
 using TeamProject.Models;
-using Avalonia.Controls.ApplicationLifetimes;
 
 namespace TeamProject.ViewModels;
 
@@ -67,13 +67,14 @@ public class MainViewModel : ViewModelBase
     }
 
     public string? CurrentImagePath { get; set; }
-    public int ThresholdValue { get; set; } = 120;
+    public int ThresholdValue { get; set; } = 30;
 
     public ReactiveCommand<Unit, Unit> LoadImageCommand { get; }
     public ReactiveCommand<Unit, Unit> InspectCommand { get; }
     public ReactiveCommand<Unit, Unit> ResetZoomCommand { get; }
     public ReactiveCommand<PointerWheelEventArgs, Unit> ZoomInCommand { get; }
     public ReactiveCommand<PointerWheelEventArgs, Unit> ZoomOutCommand { get; }
+    public ReactiveCommand<Vector, Unit> PanCommand { get; }
 
     public MainViewModel()
     {
@@ -82,32 +83,11 @@ public class MainViewModel : ViewModelBase
         ResetZoomCommand = ReactiveCommand.Create(ResetZoom);
         ZoomInCommand = ReactiveCommand.Create<PointerWheelEventArgs>(OnZoomIn);
         ZoomOutCommand = ReactiveCommand.Create<PointerWheelEventArgs>(OnZoomOut);
-    }
-
-    private void OnZoomIn(PointerWheelEventArgs e)
-    {
-        var mousePos = e.GetPosition(null);
-        double oldZoom = ZoomLevel;
-        double newZoom = Math.Clamp(oldZoom + 0.05, 0.05, 10.0);
-        double ratio = newZoom / oldZoom;
-
-        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
-        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
-
-        ZoomLevel = newZoom;
-    }
-
-    private void OnZoomOut(PointerWheelEventArgs e)
-    {
-        var mousePos = e.GetPosition(null);
-        double oldZoom = ZoomLevel;
-        double newZoom = Math.Clamp(oldZoom - 0.05, 0.05, 10.0);
-        double ratio = newZoom / oldZoom;
-
-        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
-        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
-
-        ZoomLevel = newZoom;
+        PanCommand = ReactiveCommand.Create<Vector>(delta =>
+        {
+            OffsetX += delta.X;
+            OffsetY += delta.Y;
+        });
     }
 
     private async Task LoadImageAsync()
@@ -168,12 +148,38 @@ public class MainViewModel : ViewModelBase
         OffsetY = 0;
     }
 
+    private void OnZoomIn(PointerWheelEventArgs e)
+    {
+        var mousePos = e.GetPosition(null);
+        double oldZoom = ZoomLevel;
+        double newZoom = Math.Clamp(oldZoom + 0.05, 0.05, 10.0);
+        double ratio = newZoom / oldZoom;
+
+        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
+        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
+
+        ZoomLevel = newZoom;
+    }
+
+    private void OnZoomOut(PointerWheelEventArgs e)
+    {
+        var mousePos = e.GetPosition(null);
+        double oldZoom = ZoomLevel;
+        double newZoom = Math.Clamp(oldZoom - 0.05, 0.05, 10.0);
+        double ratio = newZoom / oldZoom;
+
+        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
+        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
+
+        ZoomLevel = newZoom;
+    }
+
     private void ShowPreview(Defect defect)
     {
         if (string.IsNullOrEmpty(CurrentImagePath))
             return;
 
-        using var src = new Mat(CurrentImagePath, ImreadModes.Color);
+        using var src = new Mat(CurrentImagePath, ImreadModes.Grayscale);
         if (src.Empty())
             return;
 

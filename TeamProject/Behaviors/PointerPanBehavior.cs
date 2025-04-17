@@ -7,7 +7,7 @@ using System.Windows.Input;
 
 namespace TeamProject.Behaviors;
 
-public class PointerPanBehavior : Behavior<Control>
+public class PointerPanBehavior : Behavior<InputElement>
 {
     public static readonly StyledProperty<ICommand> PanCommandProperty =
         AvaloniaProperty.Register<PointerPanBehavior, ICommand>(nameof(PanCommand));
@@ -28,6 +28,7 @@ public class PointerPanBehavior : Behavior<Control>
             AssociatedObject.PointerPressed += OnPressed;
             AssociatedObject.PointerMoved += OnMoved;
             AssociatedObject.PointerReleased += OnReleased;
+            AssociatedObject.Cursor = new Cursor(StandardCursorType.SizeAll);
         }
     }
 
@@ -39,6 +40,7 @@ public class PointerPanBehavior : Behavior<Control>
             AssociatedObject.PointerPressed -= OnPressed;
             AssociatedObject.PointerMoved -= OnMoved;
             AssociatedObject.PointerReleased -= OnReleased;
+            AssociatedObject.Cursor = Cursor.Default;
         }
     }
 
@@ -56,10 +58,15 @@ public class PointerPanBehavior : Behavior<Control>
             return;
 
         var current = e.GetPosition(AssociatedObject);
-        var delta = current - _lastPoint.Value;
+        var deltaPoint = current - _lastPoint.Value;
         _lastPoint = current;
 
-        PanCommand?.Execute(delta);
+        var delta = new Vector(deltaPoint.X, deltaPoint.Y);
+
+        if (PanCommand?.CanExecute(delta) == true)
+        {
+            PanCommand.Execute(delta);
+        }
     }
 
     private void OnReleased(object? sender, PointerReleasedEventArgs e)

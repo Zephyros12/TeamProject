@@ -27,7 +27,7 @@
                 <ScrollViewer ClipToBounds="True">
                     <Image x:Name="ZoombleImage"
                            Source="{Binding Image}"
-                           Stretch="None"
+                           Stretch="Uniform"
                            Cursor="Cross">
                         <i:Interaction.Behaviors>
                             <behaviors:PointerWheelChangedBehavior
