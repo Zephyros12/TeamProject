@@ -149,17 +149,8 @@ public static class DefectChecker
                 continue;
 
             using var roiMat = new Mat(filteredPatch, rect);
-            Cv2.MeanStdDev(roiMat, out _, out var stddev);
-            if (stddev[0] < 5)
-                continue;
-
-            using var sobelX = new Mat();
-            using var sobelY = new Mat();
-            Cv2.Sobel(roiMat, sobelX, MatType.CV_32F, 1, 0);
-            Cv2.Sobel(roiMat, sobelY, MatType.CV_32F, 0, 1);
-            Scalar meanX = Cv2.Mean(sobelX);
-            Scalar meanY = Cv2.Mean(sobelY);
-            if (Math.Abs(meanX.Val0 - meanY.Val0) > 50)
+            Scalar mean = Cv2.Mean(roiMat);
+            if (mean.Val0 < 20 || mean.Val0 > 240)
                 continue;
 
             int roiTop = patchOffsetY + rect.Y;
