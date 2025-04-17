@@ -1,7 +1,9 @@
 ﻿using OpenCvSharp;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace TeamProject.Models;
 
@@ -9,56 +11,62 @@ public static class DefectChecker
 {
     public static (List<Defect> defects, Mat resultImage) FindDefectsWithDraw(string imagePath, int threshold)
     {
-        var defects = new List<Defect>();
+        var defects = new ConcurrentBag<Defect>();
 
-        var src = new Mat(imagePath, ImreadModes.Color);
+        var src = new Mat(imagePath, ImreadModes.Grayscale);
         if (src.Empty())
-            return (defects, src);
+            return (new List<Defect>(), src);
 
-        int patchSize = 256;
+        int patchSize = 512;
+        int cols = src.Cols;
+        int rows = src.Rows;
 
-        for (int y = 0; y < src.Rows; y += patchSize)
+        Parallel.For(0, (int)Math.Ceiling((double)rows / patchSize), py =>
         {
-            for (int x = 0; x < src.Cols; x += patchSize)
+            for (int px = 0; px < Math.Ceiling((double)cols / patchSize); px++)
             {
-                int width = Math.Min(patchSize, src.Cols - x);
-                int height = Math.Min(patchSize, src.Rows - y);
+                int x = px * patchSize;
+                int y = py * patchSize;
+                int width = Math.Min(patchSize, cols - x);
+                int height = Math.Min(patchSize, rows - y);
+
                 var roi = new Rect(x, y, width, height);
-                var patch = new Mat(src, roi);
+                using var patch = new Mat(src, roi);
 
-                var found = FindDefectsInPatch(patch);
-
-                foreach (var d in found)
+                var localDefects = ProcessPatch(patch);
+                foreach (var d in localDefects)
                 {
-                    var global = new Defect
+                    defects.Add(new Defect
                     {
                         X = d.X + x,
                         Y = d.Y + y,
                         Width = d.Width,
                         Height = d.Height
-                    };
-                    defects.Add(global);
-                    Cv2.Rectangle(src, new Rect(global.X, global.Y, global.Width, global.Height), Scalar.Yellow, 1);
+                    });
                 }
             }
+        });
+
+        var result = new Mat();
+        Cv2.CvtColor(src, result, ColorConversionCodes.GRAY2BGR);
+
+        foreach (var defect in defects)
+        {
+            Cv2.Rectangle(result, new Rect(defect.X, defect.Y, defect.Width, defect.Height), Scalar.Yellow, 2);
         }
 
-        return (defects, src);
+        return (new List<Defect>(defects), result);
     }
 
-    private static List<Defect> FindDefectsInPatch(Mat patch)
+    private static List<Defect> ProcessPatch(Mat patch)
     {
-        var defects = new List<Defect>();
-
-        using var gray = new Mat();
-        Cv2.CvtColor(patch, gray, ColorConversionCodes.BGR2GRAY);
-        Cv2.GaussianBlur(gray, gray, new Size(3, 3), 0);
+        var list = new List<Defect>();
 
         using var binary = new Mat();
-        Cv2.Threshold(gray, binary, 0, 255, ThresholdTypes.BinaryInv | ThresholdTypes.Otsu);
+        Cv2.Threshold(patch, binary, 30, 255, ThresholdTypes.BinaryInv);
 
-        using var morphed = new Mat();
         var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
+        using var morphed = new Mat();
         Cv2.MorphologyEx(binary, morphed, MorphTypes.Close, kernel);
 
         Cv2.FindContours(morphed, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
@@ -67,18 +75,11 @@ public static class DefectChecker
         {
             var rect = Cv2.BoundingRect(contour);
             double area = Cv2.ContourArea(contour);
-            double perimeter = Cv2.ArcLength(contour, true);
-            double aspectRatio = (double)rect.Width / rect.Height;
-            double circularity = perimeter == 0 ? 0 : 4 * Math.PI * area / (perimeter * perimeter);
 
-            bool tooSmall = area < 1;
-            bool tooLarge = area > 2000;
-            bool badAspect = aspectRatio < 0.01 || aspectRatio > 100.0;
-
-            if (tooSmall || tooLarge || badAspect)
+            if (area < 2 || area > 500)
                 continue;
 
-            defects.Add(new Defect
+            list.Add(new Defect
             {
                 X = rect.X,
                 Y = rect.Y,
@@ -87,13 +88,13 @@ public static class DefectChecker
             });
         }
 
-        return defects;
+        return list;
     }
 
     public static MemoryStream ToMemoryStream(this Mat mat)
     {
         var ms = new MemoryStream();
-        Cv2.ImEncode(".bmp", mat, out var imageBytes);
+        Cv2.ImEncode(".png", mat, out var imageBytes);
         ms.Write(imageBytes, 0, imageBytes.Length);
         ms.Seek(0, SeekOrigin.Begin);
         return ms;
