@@ -18,29 +18,20 @@ public static class DefectChecker
     public static (List<Defect> defects, Mat resultImage) FindDefectsWithDraw(string imagePath, int threshold)
     {
         var rawDefects = new ConcurrentBag<Defect>();
-
         var src = new Mat(imagePath, ImreadModes.Grayscale);
-        if (src.Empty())
-            return (new List<Defect>(), src);
+        if (src.Empty()) return ([], src);
 
-        int patchSize = 256;
-        int cols = src.Cols;
-        int rows = src.Rows;
+        int patchSize = 512, stride = 512;
+        int cols = src.Cols, rows = src.Rows;
 
-        var meanProfile = new double[rows];
-        for (int y = 0; y < rows; y++)
-        {
-            meanProfile[y] = src.Row(y).Mean().Val0;
-        }
+        var meanProfile = Enumerable.Range(0, rows)
+            .Select(y => src.Row(y).Mean().Val0)
+            .ToArray();
 
-        var boundaryY = new List<int>();
-        for (int y = 1; y < rows - 1; y++)
-        {
-            double diff = Math.Abs(meanProfile[y] - meanProfile[y - 1]);
-            if (diff > 20) boundaryY.Add(y);
-        }
+        var boundaryY = Enumerable.Range(1, rows - 2)
+            .Where(y => Math.Abs(meanProfile[y] - meanProfile[y - 1]) > 20)
+            .ToList();
 
-        int stride = patchSize;
         var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
 
         Parallel.For(0, rows / stride, options, py =>
@@ -51,11 +42,11 @@ public static class DefectChecker
                 int y = py * stride;
                 int width = Math.Min(patchSize, cols - x);
                 int height = Math.Min(patchSize, rows - y);
-
                 var roi = new Rect(x, y, width, height);
-                using var patch = new Mat(src, roi);
 
+                using var patch = new Mat(src, roi);
                 var localDefects = ProcessPatchWithDualTopHatAndDoG(patch, boundaryY, y);
+
                 foreach (var d in localDefects)
                 {
                     rawDefects.Add(new Defect
@@ -71,11 +62,8 @@ public static class DefectChecker
 
         var result = new Mat();
         Cv2.CvtColor(src, result, ColorConversionCodes.GRAY2BGR);
-
         foreach (var defect in rawDefects)
-        {
             Cv2.Rectangle(result, new Rect(defect.X, defect.Y, defect.Width, defect.Height), Scalar.Yellow, 4);
-        }
 
         return (rawDefects.ToList(), result);
     }
@@ -85,35 +73,36 @@ public static class DefectChecker
         var list = new List<Defect>();
         var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(7, 7));
 
-        // 💡 회색 띠 마스킹 (밝기 150~200 제거)
+        // 1. 회색 띠 제거
         var mask = new Mat();
         Cv2.InRange(patch, new Scalar(150), new Scalar(200), mask);
         Cv2.BitwiseNot(mask, mask);
         using var filteredPatch = new Mat();
         patch.CopyTo(filteredPatch, mask);
 
+        // 2. 어두운 점 TopHat
         var grayMask = new Mat();
         Cv2.InRange(filteredPatch, new Scalar(80), new Scalar(200), grayMask);
         using var grayMasked = new Mat();
         filteredPatch.CopyTo(grayMasked, grayMask);
-
         using var backgroundGray = new Mat();
         Cv2.MorphologyEx(grayMasked, backgroundGray, MorphTypes.Open, kernel);
         using var darkDefect = new Mat();
         Cv2.Subtract(grayMasked, backgroundGray, darkDefect);
 
+        // 3. 밝은 점 TopHat (반전 이미지)
         var blackMask = new Mat();
         Cv2.InRange(filteredPatch, new Scalar(0), new Scalar(80), blackMask);
         using var inverted = new Mat();
         Cv2.BitwiseNot(filteredPatch, inverted);
         using var blackMasked = new Mat();
         inverted.CopyTo(blackMasked, blackMask);
-
         using var backgroundLight = new Mat();
         Cv2.MorphologyEx(blackMasked, backgroundLight, MorphTypes.Open, kernel);
         using var lightDefect = new Mat();
         Cv2.Subtract(blackMasked, backgroundLight, lightDefect);
 
+        // 4. DoG
         using var blurSmall = new Mat();
         using var blurLarge = new Mat();
         Cv2.GaussianBlur(filteredPatch, blurSmall, new Size(3, 3), 1);
@@ -122,14 +111,16 @@ public static class DefectChecker
         Cv2.Subtract(blurSmall, blurLarge, dog);
         Cv2.Threshold(dog, dog, 10, 255, ThresholdTypes.Tozero);
 
+        // 5. 병합
         using var combined = new Mat();
-        Cv2.Add(darkDefect, lightDefect, combined);
+        Cv2.AddWeighted(darkDefect, 1.0, lightDefect, 1.5, 0, combined);
         Cv2.Add(combined, dog, combined);
         Cv2.Normalize(combined, combined, 0, 255, NormTypes.MinMax);
 
         using var binary = new Mat();
         Cv2.Threshold(combined, binary, 10, 255, ThresholdTypes.Binary);
 
+        // 6. ROI 추출 및 필터링
         Cv2.FindContours(binary, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
         foreach (var contour in contours)
@@ -140,12 +131,10 @@ public static class DefectChecker
             double aspectRatio = (double)rect.Width / rect.Height;
             double circularity = perimeter == 0 ? 0 : 4 * Math.PI * area / (perimeter * perimeter);
 
-            bool tooSmall = area < 5;
-            bool tooLarge = area > 800;
-            bool badAspect = aspectRatio < 0.2 || aspectRatio > 4.0;
-            bool notRound = circularity < 0.7;
-            bool isNearBorder = rect.X < 5 || rect.Y < 5 || rect.Right > patch.Width - 5 || rect.Bottom > patch.Height - 5;
-            if (tooSmall || tooLarge || badAspect || notRound || isNearBorder)
+            if (area < 5 || area > 800 ||
+                aspectRatio < 0.2 || aspectRatio > 4.0 ||
+                circularity < 0.7 ||
+                rect.X < 5 || rect.Y < 5 || rect.Right > patch.Width - 5 || rect.Bottom > patch.Height - 5)
                 continue;
 
             using var roiMat = new Mat(filteredPatch, rect);
@@ -155,17 +144,10 @@ public static class DefectChecker
 
             int roiTop = patchOffsetY + rect.Y;
             int roiBottom = roiTop + rect.Height;
-            bool overlapsBoundary = globalBoundaryY.Any(b => b >= roiTop && b <= roiBottom);
-            if (overlapsBoundary)
+            if (globalBoundaryY.Any(b => b >= roiTop && b <= roiBottom))
                 continue;
 
-            list.Add(new Defect
-            {
-                X = rect.X,
-                Y = rect.Y,
-                Width = rect.Width,
-                Height = rect.Height
-            });
+            list.Add(new Defect { X = rect.X, Y = rect.Y, Width = rect.Width, Height = rect.Height });
         }
 
         return list;
