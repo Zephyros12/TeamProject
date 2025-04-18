@@ -53,6 +53,7 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel>
+                                <TextBlock Text="{Binding Type}" FontWeight="Bold" Foreground="DarkSlateGray"/>
                                 <TextBlock Text="{Binding X, StringFormat='X: {0}'}"/>
                                 <TextBlock Text="{Binding Y, StringFormat='Y: {0}'}"/>
                                 <TextBlock Text="{Binding Width, StringFormat='W: {0}'}"/>

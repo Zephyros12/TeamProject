@@ -72,7 +72,14 @@ public static class DarkDefectChecker
             if (globalBoundaryY.Any(b => b >= roiTop && b <= roiBottom))
                 continue;
 
-            list.Add(new Defect { X = rect.X, Y = rect.Y, Width = rect.Width, Height = rect.Height });
+            list.Add(new Defect
+            { 
+                X = rect.X,
+                Y = rect.Y,
+                Width = rect.Width,
+                Height = rect.Height,
+                Type = "Dark"
+            });
         }
 
         return list;

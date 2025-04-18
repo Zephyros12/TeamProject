@@ -47,7 +47,8 @@ public static class DefectChecker
                         X = d.X + x + offset.X,
                         Y = d.Y + y + offset.Y,
                         Width = d.Width,
-                        Height = d.Height
+                        Height = d.Height,
+                        Type = d.Type
                     });
                 }
             }
