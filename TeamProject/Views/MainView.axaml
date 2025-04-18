@@ -7,7 +7,7 @@
     xmlns:behaviors="clr-namespace:TeamProject.Behaviors">
 
     <UserControl.DataContext>
-        <viewmodels:MainViewModel/>
+        <viewmodels:MainViewModel />
     </UserControl.DataContext>
 
     <DockPanel Margin="20">
@@ -31,14 +31,14 @@
                            Cursor="Cross">
                         <i:Interaction.Behaviors>
                             <behaviors:PointerWheelChangedBehavior
-                                ZoomInCommand="{Binding ZoomInCommand}"
-                                ZoomOutCommand="{Binding ZoomOutCommand}"/>
-                            <behaviors:PointerPanBehavior PanCommand="{Binding PanCommand}" />
+                                ZoomHandler="{Binding}" />
+                            <behaviors:PointerPanBehavior
+                                PanCommand="{Binding PanCommand}" />
                         </i:Interaction.Behaviors>
                         <Image.RenderTransform>
                             <TransformGroup>
-                                <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
-                                <TranslateTransform X="{Binding OffsetX}" Y="{Binding OffsetY}"/>
+                                <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}" />
+                                <TranslateTransform X="{Binding OffsetX}" Y="{Binding OffsetY}" />
                             </TransformGroup>
                         </Image.RenderTransform>
                     </Image>

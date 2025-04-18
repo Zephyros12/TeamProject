@@ -25,9 +25,9 @@ public class PointerPanBehavior : Behavior<InputElement>
         base.OnAttached();
         if (AssociatedObject != null)
         {
-            AssociatedObject.PointerPressed += OnPressed;
-            AssociatedObject.PointerMoved += OnMoved;
-            AssociatedObject.PointerReleased += OnReleased;
+            AssociatedObject.PointerPressed += OnPointerPressed;
+            AssociatedObject.PointerMoved += OnPointerMoved;
+            AssociatedObject.PointerReleased += OnPointerReleased;
             AssociatedObject.Cursor = new Cursor(StandardCursorType.SizeAll);
         }
     }
@@ -37,14 +37,14 @@ public class PointerPanBehavior : Behavior<InputElement>
         base.OnDetaching();
         if (AssociatedObject != null)
         {
-            AssociatedObject.PointerPressed -= OnPressed;
-            AssociatedObject.PointerMoved -= OnMoved;
-            AssociatedObject.PointerReleased -= OnReleased;
+            AssociatedObject.PointerPressed -= OnPointerPressed;
+            AssociatedObject.PointerMoved -= OnPointerMoved;
+            AssociatedObject.PointerReleased -= OnPointerReleased;
             AssociatedObject.Cursor = Cursor.Default;
         }
     }
 
-    private void OnPressed(object? sender, PointerPressedEventArgs e)
+    private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(AssociatedObject).Properties.IsLeftButtonPressed)
         {
@@ -52,16 +52,14 @@ public class PointerPanBehavior : Behavior<InputElement>
         }
     }
 
-    private void OnMoved(object? sender, PointerEventArgs e)
+    private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_lastPoint == null || !e.GetCurrentPoint(AssociatedObject).Properties.IsLeftButtonPressed)
+        if (_lastPoint is not { } last || !e.GetCurrentPoint(AssociatedObject).Properties.IsLeftButtonPressed)
             return;
 
         var current = e.GetPosition(AssociatedObject);
-        var deltaPoint = current - _lastPoint.Value;
+        var delta = new Vector(current.X - last.X, current.Y - last.Y);
         _lastPoint = current;
-
-        var delta = new Vector(deltaPoint.X, deltaPoint.Y);
 
         if (PanCommand?.CanExecute(delta) == true)
         {
@@ -69,7 +67,7 @@ public class PointerPanBehavior : Behavior<InputElement>
         }
     }
 
-    private void OnReleased(object? sender, PointerReleasedEventArgs e)
+    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         _lastPoint = null;
     }

@@ -4,34 +4,35 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using OpenCvSharp;
-using ReactiveUI;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
-using System.Reactive;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using TeamProject.Models;
 
 namespace TeamProject.ViewModels;
 
-public class MainViewModel : ViewModelBase
+public class MainViewModel : INotifyPropertyChanged
 {
     private Bitmap? _image;
     public Bitmap? Image
     {
         get => _image;
-        set => this.RaiseAndSetIfChanged(ref _image, value);
+        set => SetProperty(ref _image, value);
     }
 
     private Bitmap? _previewImage;
     public Bitmap? PreviewImage
     {
         get => _previewImage;
-        set => this.RaiseAndSetIfChanged(ref _previewImage, value);
+        set => SetProperty(ref _previewImage, value);
     }
 
-    public ObservableCollection<Defect> Defects { get; } = [];
+    public ObservableCollection<Defect> Defects { get; } = new();
 
     private Defect? _selectedDefect;
     public Defect? SelectedDefect
@@ -39,9 +40,10 @@ public class MainViewModel : ViewModelBase
         get => _selectedDefect;
         set
         {
-            this.RaiseAndSetIfChanged(ref _selectedDefect, value);
-            if (value != null)
+            if (SetProperty(ref _selectedDefect, value) && value is not null)
+            {
                 ShowPreview(value);
+            }
         }
     }
 
@@ -49,45 +51,38 @@ public class MainViewModel : ViewModelBase
     public double ZoomLevel
     {
         get => _zoomLevel;
-        set => this.RaiseAndSetIfChanged(ref _zoomLevel, Math.Clamp(value, 0.05, 10.0));
+        set => SetProperty(ref _zoomLevel, Math.Clamp(value, 0.05, 10.0));
     }
 
     private double _offsetX;
     public double OffsetX
     {
         get => _offsetX;
-        set => this.RaiseAndSetIfChanged(ref _offsetX, value);
+        set => SetProperty(ref _offsetX, value);
     }
 
     private double _offsetY;
     public double OffsetY
     {
         get => _offsetY;
-        set => this.RaiseAndSetIfChanged(ref _offsetY, value);
+        set => SetProperty(ref _offsetY, value);
     }
 
     public string? CurrentImagePath { get; set; }
+
     public int ThresholdValue { get; set; } = 30;
 
-    public ReactiveCommand<Unit, Unit> LoadImageCommand { get; }
-    public ReactiveCommand<Unit, Unit> InspectCommand { get; }
-    public ReactiveCommand<Unit, Unit> ResetZoomCommand { get; }
-    public ReactiveCommand<PointerWheelEventArgs, Unit> ZoomInCommand { get; }
-    public ReactiveCommand<PointerWheelEventArgs, Unit> ZoomOutCommand { get; }
-    public ReactiveCommand<Vector, Unit> PanCommand { get; }
+    public ICommand LoadImageCommand { get; }
+    public ICommand InspectCommand { get; }
+    public ICommand ResetZoomCommand { get; }
+    public ICommand PanCommand { get; }
 
     public MainViewModel()
     {
-        LoadImageCommand = ReactiveCommand.CreateFromTask(LoadImageAsync);
-        InspectCommand = ReactiveCommand.Create(InspectImage);
-        ResetZoomCommand = ReactiveCommand.Create(ResetZoom);
-        ZoomInCommand = ReactiveCommand.Create<PointerWheelEventArgs>(OnZoomIn);
-        ZoomOutCommand = ReactiveCommand.Create<PointerWheelEventArgs>(OnZoomOut);
-        PanCommand = ReactiveCommand.Create<Vector>(delta =>
-        {
-            OffsetX += delta.X;
-            OffsetY += delta.Y;
-        });
+        LoadImageCommand = new RelayCommand(async () => await LoadImageAsync());
+        InspectCommand = new RelayCommand(InspectImage);
+        ResetZoomCommand = new RelayCommand(ResetZoom);
+        PanCommand = new RelayCommand<Vector>(delta => Pan(delta.X, delta.Y));
     }
 
     private async Task LoadImageAsync()
@@ -141,37 +136,33 @@ public class MainViewModel : ViewModelBase
         ResetZoom();
     }
 
+    public void ZoomWithMouse(double mouseX, double mouseY, double delta)
+    {
+        double oldZoom = ZoomLevel;
+        double newZoom = delta > 0
+            ? Math.Clamp(oldZoom + 0.05, 0.05, 10.0)
+            : Math.Clamp(oldZoom - 0.05, 0.05, 10.0);
+
+        if (Math.Abs(newZoom - oldZoom) > 0.0001)
+        {
+            double zoomRatio = newZoom / oldZoom;
+            OffsetX = (OffsetX - mouseX) * zoomRatio + mouseX;
+            OffsetY = (OffsetY - mouseY) * zoomRatio + mouseY;
+            ZoomLevel = newZoom;
+        }
+    }
+
+    public void Pan(double deltaX, double deltaY)
+    {
+        OffsetX += deltaX;
+        OffsetY += deltaY;
+    }
+
     private void ResetZoom()
     {
         ZoomLevel = 1.0;
         OffsetX = 0;
         OffsetY = 0;
-    }
-
-    private void OnZoomIn(PointerWheelEventArgs e)
-    {
-        var mousePos = e.GetPosition(null);
-        double oldZoom = ZoomLevel;
-        double newZoom = Math.Clamp(oldZoom + 0.05, 0.05, 10.0);
-        double ratio = newZoom / oldZoom;
-
-        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
-        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
-
-        ZoomLevel = newZoom;
-    }
-
-    private void OnZoomOut(PointerWheelEventArgs e)
-    {
-        var mousePos = e.GetPosition(null);
-        double oldZoom = ZoomLevel;
-        double newZoom = Math.Clamp(oldZoom - 0.05, 0.05, 10.0);
-        double ratio = newZoom / oldZoom;
-
-        OffsetX = (OffsetX - mousePos.X) * ratio + mousePos.X;
-        OffsetY = (OffsetY - mousePos.Y) * ratio + mousePos.Y;
-
-        ZoomLevel = newZoom;
     }
 
     private void ShowPreview(Defect defect)
@@ -199,5 +190,19 @@ public class MainViewModel : ViewModelBase
 
         using var ms = zoomed.ToMemoryStream();
         PreviewImage = new Bitmap(ms);
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return false;
+
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
     }
 }
