@@ -9,31 +9,38 @@ public static class BrightDefectChecker
     public static List<Defect> Find(Mat patch)
     {
         var list = new List<Defect>();
+        var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(7, 7));
 
-        // 1. Sobel Gradient 계산
-        using var gradX = new Mat();
-        using var gradY = new Mat();
-        using var absGradX = new Mat();
-        using var absGradY = new Mat();
-        Cv2.Sobel(patch, gradX, MatType.CV_16S, 1, 0);
-        Cv2.Sobel(patch, gradY, MatType.CV_16S, 0, 1);
-        Cv2.ConvertScaleAbs(gradX, absGradX);
-        Cv2.ConvertScaleAbs(gradY, absGradY);
+        // 어두운 배경만 마스킹
+        var darkMask = new Mat();
+        Cv2.InRange(patch, new Scalar(0), new Scalar(100), darkMask);
+        using var masked = new Mat();
+        patch.CopyTo(masked, darkMask);
 
-        using var gradient = new Mat();
-        Cv2.AddWeighted(absGradX, 0.5, absGradY, 0.5, 0, gradient);
+        // 밝은 점 TopHat (반전 이미지 기반)
+        using var inverted = new Mat();
+        Cv2.BitwiseNot(masked, inverted);
+        using var background = new Mat();
+        Cv2.MorphologyEx(inverted, background, MorphTypes.Open, kernel);
+        using var lightDefect = new Mat();
+        Cv2.Subtract(inverted, background, lightDefect);
 
-        // 2. 밝은 마스크 추출
-        using var brightMask = new Mat();
-        Cv2.Threshold(patch, brightMask, 200, 255, ThresholdTypes.Binary);
+        // DoG
+        using var blurSmall = new Mat();
+        using var blurLarge = new Mat();
+        Cv2.GaussianBlur(masked, blurSmall, new Size(3, 3), 1);
+        Cv2.GaussianBlur(masked, blurLarge, new Size(9, 9), 2);
+        using var dog = new Mat();
+        Cv2.Subtract(blurSmall, blurLarge, dog);
+        Cv2.Threshold(dog, dog, 10, 255, ThresholdTypes.Tozero);
 
-        // 3. 경계 + 밝기 마스크 조합
-        using var candidate = new Mat();
-        Cv2.BitwiseAnd(gradient, brightMask, candidate);
+        // 병합
+        using var combined = new Mat();
+        Cv2.AddWeighted(lightDefect, 1.0, dog, 1.0, 0, combined);
+        Cv2.Normalize(combined, combined, 0, 255, NormTypes.MinMax);
 
-        // 4. 이진화 (gradient 강한 부분만)
         using var binary = new Mat();
-        Cv2.Threshold(candidate, binary, 15, 255, ThresholdTypes.Binary);
+        Cv2.Threshold(combined, binary, 10, 255, ThresholdTypes.Binary);
 
         Cv2.FindContours(binary, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 

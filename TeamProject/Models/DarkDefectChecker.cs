@@ -12,7 +12,7 @@ public static class DarkDefectChecker
         var list = new List<Defect>();
         var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(7, 7));
 
-        // 회색띠 제거
+        // 회색 띠 제거
         var mask = new Mat();
         Cv2.InRange(patch, new Scalar(150), new Scalar(200), mask);
         Cv2.BitwiseNot(mask, mask);
@@ -73,7 +73,7 @@ public static class DarkDefectChecker
                 continue;
 
             list.Add(new Defect
-            { 
+            {
                 X = rect.X,
                 Y = rect.Y,
                 Width = rect.Width,
