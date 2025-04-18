@@ -122,9 +122,43 @@ public class MainViewModel : INotifyPropertyChanged
         if (string.IsNullOrEmpty(CurrentImagePath) || !File.Exists(CurrentImagePath))
             return;
 
-        var (defects, resultMat) = DefectChecker.FindDefectsWithDraw(CurrentImagePath, ThresholdValue);
+        using var original = new Mat(CurrentImagePath, ImreadModes.Grayscale);
 
-        using var ms = resultMat.ToMemoryStream();
+        int cutTop = 570;
+        int cutBottom = 560;
+        int cutRight = 1700;
+
+        int croppedWidth = original.Cols - cutRight;
+        int croppedHeight = original.Rows - cutTop - cutBottom;
+
+        var cropRect = new OpenCvSharp.Rect(0, cutTop, croppedWidth, croppedHeight);
+        var offset = new OpenCvSharp.Point(cropRect.X, cropRect.Y);
+
+        if (cropRect.X < 0 || cropRect.Y < 0 || cropRect.Right > original.Cols || cropRect.Bottom > original.Rows)
+        {
+            Console.WriteLine("잘라낸 ROI가 이미지 범위를 벗어납니다.");
+            return;
+        }
+
+        using var cropped = new Mat(original, cropRect);
+
+        var (defects, _) = DefectChecker.FindDefectsWithDraw(cropped, ThresholdValue, offset);
+
+        var result = new Mat();
+        Cv2.CvtColor(original, result, ColorConversionCodes.GRAY2BGR);
+
+        foreach (var defect in defects)
+        {
+            int padding = 30;
+            int x = Math.Max(defect.X - padding, 0);
+            int y = Math.Max(defect.Y - padding, 0);
+            int width = Math.Min(defect.Width + padding * 2, result.Cols - x);
+            int height = Math.Min(defect.Height + padding * 2, result.Rows - y);
+
+            Cv2.Rectangle(result, new OpenCvSharp.Rect(x, y, width, height), Scalar.Yellow, 2);
+        }
+
+        using var ms = result.ToMemoryStream();
         Image = new Bitmap(ms);
 
         Defects.Clear();

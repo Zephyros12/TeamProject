@@ -1,10 +1,8 @@
 ﻿using OpenCvSharp;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace TeamProject.Models;
 
@@ -15,64 +13,66 @@ public static class DefectChecker
         Cv2.SetNumThreads(0);
     }
 
-    public static (List<Defect> defects, Mat resultImage) FindDefectsWithDraw(string imagePath, int threshold)
+    // ✅ 잘린 이미지 + 오프셋 기준 검사
+    public static (List<Defect> defects, Mat resultImage) FindDefectsWithDraw(Mat cropped, int threshold, Point offset)
     {
-        var rawDefects = new ConcurrentBag<Defect>();
-        var src = new Mat(imagePath, ImreadModes.Grayscale);
-        if (src.Empty()) return ([], src);
-
+        var defects = new List<Defect>();
         int patchSize = 512, stride = 512;
-        int cols = src.Cols, rows = src.Rows;
 
-        var meanProfile = Enumerable.Range(0, rows)
-            .Select(y => src.Row(y).Mean().Val0)
+        var meanProfile = Enumerable.Range(0, cropped.Rows)
+            .Select(y => cropped.Row(y).Mean().Val0)
             .ToArray();
 
-        var boundaryY = Enumerable.Range(1, rows - 2)
+        var boundaryY = Enumerable.Range(1, cropped.Rows - 2)
             .Where(y => Math.Abs(meanProfile[y] - meanProfile[y - 1]) > 20)
             .ToList();
 
-        var options = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
-
-        Parallel.For(0, rows / stride, options, py =>
+        for (int py = 0; py < cropped.Rows / stride; py++)
         {
-            for (int px = 0; px < cols / stride; px++)
+            for (int px = 0; px < cropped.Cols / stride; px++)
             {
                 int x = px * stride;
                 int y = py * stride;
-                int width = Math.Min(patchSize, cols - x);
-                int height = Math.Min(patchSize, rows - y);
-                var roi = new Rect(x, y, width, height);
+                int width = Math.Min(patchSize, cropped.Cols - x);
+                int height = Math.Min(patchSize, cropped.Rows - y);
 
-                using var patch = new Mat(src, roi);
+                var roi = new Rect(x, y, width, height);
+                using var patch = new Mat(cropped, roi);
+
                 var localDefects = ProcessPatchWithDualTopHatAndDoG(patch, boundaryY, y);
 
                 foreach (var d in localDefects)
                 {
-                    rawDefects.Add(new Defect
+                    defects.Add(new Defect
                     {
-                        X = d.X + x,
-                        Y = d.Y + y,
+                        X = d.X + x + offset.X,
+                        Y = d.Y + y + offset.Y,
                         Width = d.Width,
                         Height = d.Height
                     });
                 }
             }
-        });
-
-        var result = new Mat();
-        Cv2.CvtColor(src, result, ColorConversionCodes.GRAY2BGR);
-        foreach (var defect in rawDefects)
-        {
-            int padding = 30;
-            int x = Math.Max(defect.X - padding, 0);
-            int y = Math.Max(defect.Y - padding, 0);
-            int width = defect.Width + padding * 2;
-            int height = defect.Height + padding * 2;
-
-            Cv2.Rectangle(result, new Rect(x, y, width, height), Scalar.Yellow, 4);
         }
-        return (rawDefects.ToList(), result);
+
+        // 시각화용 이미지
+        var result = new Mat();
+        Cv2.CvtColor(cropped, result, ColorConversionCodes.GRAY2BGR);
+
+        foreach (var defect in defects)
+        {
+            int px = defect.X - offset.X;
+            int py = defect.Y - offset.Y;
+
+            int padding = 30;
+            int x = Math.Max(px - padding, 0);
+            int y = Math.Max(py - padding, 0);
+            int width = Math.Min(defect.Width + padding * 2, result.Cols - x);
+            int height = Math.Min(defect.Height + padding * 2, result.Rows - y);
+
+            Cv2.Rectangle(result, new Rect(x, y, width, height), Scalar.Yellow, 2);
+        }
+
+        return (defects, result);
     }
 
     private static List<Defect> ProcessPatchWithDualTopHatAndDoG(Mat patch, List<int> globalBoundaryY, int patchOffsetY)
@@ -80,14 +80,14 @@ public static class DefectChecker
         var list = new List<Defect>();
         var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(7, 7));
 
-        // 1. 회색 띠 제거
+        // 회색 띠 제거
         var mask = new Mat();
         Cv2.InRange(patch, new Scalar(150), new Scalar(200), mask);
         Cv2.BitwiseNot(mask, mask);
         using var filteredPatch = new Mat();
         patch.CopyTo(filteredPatch, mask);
 
-        // 2. 어두운 점 TopHat
+        // 어두운 점 TopHat
         var grayMask = new Mat();
         Cv2.InRange(filteredPatch, new Scalar(80), new Scalar(200), grayMask);
         using var grayMasked = new Mat();
@@ -97,7 +97,7 @@ public static class DefectChecker
         using var darkDefect = new Mat();
         Cv2.Subtract(grayMasked, backgroundGray, darkDefect);
 
-        // 3. 밝은 점 TopHat (반전 이미지)
+        // 밝은 점 TopHat
         var blackMask = new Mat();
         Cv2.InRange(filteredPatch, new Scalar(0), new Scalar(80), blackMask);
         using var inverted = new Mat();
@@ -109,7 +109,7 @@ public static class DefectChecker
         using var lightDefect = new Mat();
         Cv2.Subtract(blackMasked, backgroundLight, lightDefect);
 
-        // 4. DoG
+        // DoG
         using var blurSmall = new Mat();
         using var blurLarge = new Mat();
         Cv2.GaussianBlur(filteredPatch, blurSmall, new Size(3, 3), 1);
@@ -118,7 +118,7 @@ public static class DefectChecker
         Cv2.Subtract(blurSmall, blurLarge, dog);
         Cv2.Threshold(dog, dog, 10, 255, ThresholdTypes.Tozero);
 
-        // 5. 병합
+        // 병합
         using var combined = new Mat();
         Cv2.AddWeighted(darkDefect, 1.0, lightDefect, 1.5, 0, combined);
         Cv2.Add(combined, dog, combined);
@@ -127,7 +127,6 @@ public static class DefectChecker
         using var binary = new Mat();
         Cv2.Threshold(combined, binary, 10, 255, ThresholdTypes.Binary);
 
-        // 6. ROI 추출 및 필터링
         Cv2.FindContours(binary, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
 
         foreach (var contour in contours)
